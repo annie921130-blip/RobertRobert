@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>♥ 專屬小驚喜兌換中心 ♥</title>
+    <style>
+        :root {
+            --primary-pink: #ffafbd;
+            --secondary-pink: #ffc3a0;
+            --text-color: #7d5a5a;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', sans-serif;
+            background: linear-gradient(135deg, var(--primary-pink), var(--secondary-pink));
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 20px;
+            padding: 20px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h1 { color: #ff6b81; font-size: 1.5rem; margin-bottom: 5px; }
+        
+        .stats-card {
+            background: #fff0f3;
+            border-radius: 15px;
+            padding: 15px;
+            margin: 20px 0;
+            border: 2px dashed #ffafbd;
+        }
+
+        .points-display {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #ff4757;
+        }
+
+        .btn {
+            background: #ff6b81;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: 0.3s;
+            margin: 5px;
+            font-weight: bold;
+        }
+
+        .btn:hover { background: #ff4757; transform: scale(1.05); }
+
+        .ticket-list { margin-top: 20px; }
+
+        .ticket-item {
+            background: white;
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            position: relative;
+        }
+
+        .ticket-info { text-align: left; flex-grow: 1; }
+
+        .del-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: #ff4757;
+            cursor: pointer;
+            font-size: 12px;
+            position: absolute;
+            right: 10px;
+            top: 5px;
+        }
+
+        .admin-panel {
+            margin-top: 30px;
+            border-top: 2px solid #ffeef0;
+            padding-top: 20px;
+            display: none;
+            background: #fffafa;
+            border-radius: 15px;
+            padding: 15px;
+        }
+
+        input {
+            width: 85%;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid #ffd1d1;
+            border-radius: 12px;
+            outline: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>小肚肚的專屬兌換中心</h1>
+    <p style="margin-top:0;">你是我最愛的寶貝🤌🏻</p>
+
+    <div class="stats-card">
+        <p style="margin:0;">目前累積愛心點數</p>
+        <div class="points-display" id="userPoints">載入中...</div>
+    </div>
+
+    <div class="ticket-list" id="ticketList">
+        </div>
+
+    <button class="btn" style="background: #fbc2eb; color: #7d5a5a; font-size: 12px;" onclick="toggleAdmin()">⚙ 管理員模式</button>
+
+    <div class="admin-panel" id="adminPanel">
+        <h3 style="color: #ff6b81;">💖 管理員密令 💖</h3>
+        <p style="font-size: 12px;">妳好，美麗的系統管理員</p>
+        
+        <input type="number" id="addPointsInput" placeholder="輸入要贈送的點數">
+        <button class="btn" onclick="addPoints()">送出愛心</button>
+        
+        <hr style="border: 0.5px solid #ffeef0;">
+        <h4>✨ 新增驚喜票券</h4>
+        <input type="text" id="tName" placeholder="票券名稱 (例：情人節大餐)">
+        <input type="number" id="tCost" placeholder="所需點數">
+        <input type="text" id="tImg" placeholder="圖片 Emoji (例：🌹, 🚲, 🍫)">
+        <button class="btn" onclick="addTicket()">上架票券</button>
+        
+        <br><br>
+        <button class="btn" style="background: #ccc;" onclick="lockAdmin()">🔒 登出管理員</button>
+        <button class="btn" style="background: #999; font-size: 10px;" onclick="resetData()">系統重置</button>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // 你的 Firebase 配置
+    const firebaseConfig = {
+        apiKey: "AIzaSyDI8ueSJikwX6Jer0XBwATZTisTkUcrAuM",
+        authDomain: "robert-81ce1.firebaseapp.com",
+        projectId: "robert-81ce1",
+        storageBucket: "robert-81ce1.firebasestorage.app",
+        messagingSenderId: "968945217444",
+        appId: "1:968945217444:web:3f59137f35d34125cfdb31"
+    };
+
+    // 初始化 Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const dataRef = ref(db, 'loveSystem');
+
+    let isAdmin = false;
+    const ADMIN_PASSWORD = "20031130";
+    let data = { points: 0, tickets: [] };
+
+    // --- 核心：從雲端監聽資料 ---
+    onValue(dataRef, (snapshot) => {
+        const cloudData = snapshot.val();
+        if (cloudData) {
+            data = cloudData;
+            if (!data.tickets) data.tickets = []; // 防止沒票券時報錯
+        } else {
+            // 如果雲端沒資料，初始化一組
+            data = {
+                points: 0,
+                tickets: [
+                    { name: "全身手工按摩 (女友牌)", cost: 10, img: "💆🏼‍♀️" },
+                    { name: "成為小寶貝的寶貝！", cost: 0, img: "🤌🏻" }
+                ]
+            };
+            saveToCloud();
+        }
+        updateUI();
+    });
+
+    // 存到雲端的方法
+    function saveToCloud() {
+        set(dataRef, data);
+    }
+
+    // 更新介面
+    window.updateUI = function() {
+        document.getElementById('userPoints').innerText = data.points;
+        const list = document.getElementById('ticketList');
+        list.innerHTML = '';
+
+        data.tickets.forEach((t, index) => {
+            const item = document.createElement('div');
+            item.className = 'ticket-item';
+            item.innerHTML = `
+                <div style="font-size: 35px; margin-right: 15px;">${t.img}</div>
+                <div class="ticket-info">
+                    <strong>${t.name}</strong><br>
+                    <small style="color:#aaa;">需 ${t.cost} 點愛心</small>
+                </div>
+                <button class="btn" style="font-size: 14px; padding: 5px 15px;" onclick="redeem(${index})">兌換</button>
+                <button class="del-btn" id="del-${index}" onclick="deleteTicket(${index})">【刪除】</button>
+            `;
+            list.appendChild(item);
+        });
+
+        if (isAdmin) {
+            document.querySelectorAll('.del-btn').forEach(btn => btn.style.display = 'block');
+        }
+    }
+
+    // 管理員功能
+    window.toggleAdmin = function() {
+        if (!isAdmin) {
+            const pwd = prompt("請輸入管理員金鑰：");
+            if (pwd === ADMIN_PASSWORD) {
+                isAdmin = true;
+                document.getElementById('adminPanel').style.display = 'block';
+                alert("歡迎回來，管理員大人！✨");
+                updateUI();
+            } else if (pwd !== null) {
+                alert("密碼錯誤喔！只有女朋友本人可以進入～");
+            }
+        } else {
+            lockAdmin();
+        }
+    }
+
+    window.lockAdmin = function() {
+        isAdmin = false;
+        document.getElementById('adminPanel').style.display = 'none';
+        updateUI();
+    }
+
+    window.addPoints = function() {
+        const p = parseInt(document.getElementById('addPointsInput').value);
+        if (!isNaN(p)) {
+            data.points += p;
+            saveToCloud();
+            alert(`已成功注入 ${p} 點能量！`);
+            document.getElementById('addPointsInput').value = '';
+        }
+    }
+
+    window.addTicket = function() {
+        const name = document.getElementById('tName').value;
+        const cost = parseInt(document.getElementById('tCost').value);
+        const img = document.getElementById('tImg').value || "🎫";
+        if (name && !isNaN(cost)) {
+            data.tickets.push({ name, cost, img });
+            saveToCloud();
+            document.getElementById('tName').value = '';
+            document.getElementById('tCost').value = '';
+            document.getElementById('tImg').value = '';
+        }
+    }
+
+    window.deleteTicket = function(index) {
+        if (confirm(`確定要刪除「${data.tickets[index].name}」嗎？`)) {
+            data.tickets.splice(index, 1);
+            saveToCloud();
+        }
+    }
+
+    window.redeem = function(index) {
+        const t = data.tickets[index];
+        if (data.points >= t.cost) {
+            if (confirm(`確定要兌換「${t.name}」嗎？`)) {
+                data.points -= t.cost;
+                saveToCloud();
+                alert(`🎉 兌換成功！\n\n快截圖傳給小寶貝，領取你的「${t.name}」！`);
+            }
+        } else {
+            alert("你的愛心點數還不夠喔！快去問問小寶貝要怎麼獲取更多點數吧～～");
+        }
+    }
+
+    window.resetData = function() {
+        if (confirm("重置會清空所有點數跟票券，確定嗎？")) {
+            data = {
+                points: 0,
+                tickets: [
+                    { name: "全身手工按摩 (女友牌)", cost: 10, img: "💆🏼‍♀️" },
+                    { name: "成為小寶貝的寶貝！", cost: 0, img: "🤌🏻" }
+                ]
+            };
+            saveToCloud();
+        }
+    }
+</script>
+
+</body>
+</html>
